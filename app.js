@@ -420,6 +420,21 @@ function calculateUserPoints(userId) {
   return { totalPoints: points, exactHits: exactCount, outcomeHits: outcomeCount, totalPredicted: predictedCount };
 }
 
+function calculateMatchPoints(match, prediction) {
+  if (!match || !match.completed) return null;
+  if (!prediction || prediction.homeScore === "" || prediction.awayScore === "") return 0;
+
+  const predHome = parseInt(prediction.homeScore, 10);
+  const predAway = parseInt(prediction.awayScore, 10);
+  const realHome = match.realHomeScore;
+  const realAway = match.realAwayScore;
+
+  if (Number.isNaN(predHome) || Number.isNaN(predAway) || realHome == null || realAway == null) return 0;
+  if (predHome === realHome && predAway === realAway) return 4;
+  if (Math.sign(predHome - predAway) === Math.sign(realHome - realAway)) return 1;
+  return 0;
+}
+
 function renderApp() {
   updateUserBadge();
   if (state.activeTab === "leaderboard") renderLeaderboard();
@@ -542,6 +557,22 @@ function renderPredictions() {
     const isLockedByTime = matchDateUTC.getTime() - Date.now() < 60 * 60 * 1000;
     const disabledAttr = (match.completed || isLive || hasPrediction || isLockedByTime || isMatchUndetermined(match)) ? "disabled" : "";
 
+    const matchPoints = calculateMatchPoints(match, prediction);
+    const pointsBadgeHtml = match.completed
+      ? `<span style="
+          background: ${matchPoints > 0 ? "rgba(34, 197, 94, 0.10)" : "rgba(220, 38, 38, 0.10)"};
+          color: ${matchPoints > 0 ? "#16a34a" : "var(--accent-red)"};
+          border: 1px solid ${matchPoints > 0 ? "rgba(34, 197, 94, 0.45)" : "rgba(220, 38, 38, 0.45)"};
+          border-radius: 8px;
+          padding: 4px 10px;
+          font-weight: 700;
+          font-size: 0.82rem;
+          white-space: nowrap;
+        ">
+          ${matchPoints > 0 ? `+${matchPoints}` : "0"} pts
+        </span>`
+      : "";
+
     const card = document.createElement("div");
     card.className = `match-card ${match.completed ? "is-completed" : ""} ${isLive ? "is-live" : ""} ${hasPrediction ? "has-prediction" : ""}`;
     card.innerHTML = `
@@ -550,8 +581,9 @@ function renderPredictions() {
         <div class="team-row"><div class="team-info">${getCountryFlag(match.homeTeam)}<span class="team-name">${match.homeTeam}</span></div><input type="number" class="score-input" id="home_${match.id}" value="${prediction.homeScore}" ${disabledAttr}></div>
         <div class="team-row"><div class="team-info">${getCountryFlag(match.awayTeam)}<span class="team-name">${match.awayTeam}</span></div><input type="number" class="score-input" id="away_${match.id}" value="${prediction.awayScore}" ${disabledAttr}></div>
       </div>
-      <div class="card-footer">
+      <div class="card-footer" style="display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;">
         <div>${match.completed ? `<div class="real-score-display">Real: <span class="real-score-badge">${match.realHomeScore} - ${match.realAwayScore}</span></div>` : hasPrediction ? `<span class="prediction-status status-saved">✓ Guardado</span>` : `<button class="btn btn-primary" onclick="confirmAndSavePrediction('${match.id}')">Guardar Pronóstico</button>`}</div>
+        <div>${pointsBadgeHtml}</div>
       </div>`;
     grid.appendChild(card);
   });
