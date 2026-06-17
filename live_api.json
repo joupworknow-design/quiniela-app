@@ -1,0 +1,38 @@
+{
+  "matches": [
+    {
+      "status": "FINISHED",
+      "homeTeam": { "shortName": "Francia" },
+      "awayTeam": { "shortName": "Senegal" },
+      "score": {
+        "fullTime": {
+          "home": 3,
+          "away": 1
+        }
+      }
+    },
+    {
+      "status": "FINISHED",
+      "homeTeam": { "shortName": "Irak" },
+      "awayTeam": { "shortName": "Noruega" },
+      "score": {
+        "fullTime": {
+          "home": 0,
+          "away": 2
+        }
+      }
+    },
+    {
+      "status": "IN_PLAY",
+      "homeTeam": { "shortName": "Argentina" },
+      "awayTeam": { "shortName": "Argelia" },
+      "score": {
+        "fullTime": {
+          "home": 1,
+          "away": 0
+        }
+      },
+      "minute": "75'"
+    }
+  ]
+}
