@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Audioplace Quiniela 2026 - Ranking General</title>
   <meta name="description" content="Audioplace Quiniela 2026. Ingresa tus pronósticos y compite con amigos. Ranking privado con resultados en tiempo real.">
+  <link rel="icon" type="image/png" href="logo2026.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -53,7 +54,7 @@
       <button class="tab-link" id="groupStageTabLink" onclick="switchTab('groupStage')" style="display: none;">📊 Grupos y Fixture</button>
       <button class="tab-link" onclick="switchTab('rules')">📋 Reglas</button>
       <button class="tab-link" id="premiosTabLink" onclick="switchTab('premios')">🎁 Premios</button>
-      <button class="tab-link" onclick="window.location.href='admin.html'">⚙️ Admin</button>
+      <button class="tab-link" id="adminTabLink" onclick="window.location.href='admin.html'" style="display: none;">⚙️ Admin</button>
     </nav>
 
     <!-- PESTAÑA: Leaderboard -->
@@ -121,9 +122,8 @@
           </div>
           
           <div class="filter-group" id="predictionFilterButtons">
-            <button class="btn-filter active" onclick="setPredictionStatusFilter('All', this)">Todos</button>
-            <button class="btn-filter" onclick="setPredictionStatusFilter('Pending', this)">Pendientes</button>
-            <button class="btn-filter" onclick="setPredictionStatusFilter('Completed', this)">Jugados</button>
+            <button class="btn-filter active" onclick="setPredictionStatusTab('pending', this)">Pendientes</button>
+            <button class="btn-filter" onclick="setPredictionStatusTab('completed', this)">Finalizados</button>
           </div>
         </div>
 
@@ -314,34 +314,16 @@
         <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
       </div>
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
-        <p style="color: var(--text-light); font-size: 0.95rem;">Ingresa tu usuario y tu código privado para acceder a tus pronósticos.</p>
+        <p style="color: var(--text-light); font-size: 0.95rem;">Ingresa tu correo y contraseña para acceder a tus pronósticos.</p>
         
         <div>
-          <label class="filter-label">Usuario</label>
-          <input type="text" id="loginUsername" class="input-select" placeholder="Ej: Ángel" autocomplete="off">
+          <label class="filter-label">Correo</label>
+          <input type="email" id="loginEmail" class="input-select" placeholder="tu-correo@email.com" autocomplete="email">
         </div>
         
         <div>
-          <label class="filter-label">PIN (Código Privado)</label>
-          <input type="password" id="loginPin" class="input-select" placeholder="Ej: 1234" readonly style="background: var(--bg-primary);">
-        </div>
-        
-        <!-- Tablero Numérico Premium -->
-        <div class="pinpad-container" style="margin-top: 5px; margin-bottom: 5px;">
-          <div class="pinpad-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('1')">1</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('2')">2</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('3')">3</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('4')">4</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('5')">5</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('6')">6</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('7')">7</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('8')">8</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('9')">9</button>
-            <button type="button" class="pinpad-btn action" onclick="pressPinKey('clear')" style="color: var(--accent-red); font-weight: 700;">C</button>
-            <button type="button" class="pinpad-btn" onclick="pressPinKey('0')">0</button>
-            <button type="button" class="pinpad-btn action" onclick="pressPinKey('backspace')">⌫</button>
-          </div>
+          <label class="filter-label">Contraseña</label>
+          <input type="password" id="loginPassword" class="input-select" placeholder="Tu contraseña" autocomplete="current-password">
         </div>
         
         <button class="btn-primary" onclick="loginUser()" style="width: 100%; padding: 12px; margin-top: 10px;">Ingresar</button>
@@ -361,7 +343,12 @@
         <button class="modal-close" onclick="closeModal('registerUserModal')">✕</button>
       </div>
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
-        <p style="color: var(--text-light); font-size: 0.95rem;">Si tu nombre ya estaba en el ranking, escríbelo igual y establece tu propio código privado.</p>
+        <p style="color: var(--text-light); font-size: 0.95rem;">Crea tu cuenta con correo, contraseña y nombre visible en el ranking.</p>
+
+        <div>
+          <label class="filter-label">Correo</label>
+          <input type="email" id="newUserEmail" class="input-select" placeholder="tu-correo@email.com" autocomplete="email">
+        </div>
         
         <div>
           <label class="filter-label">Nombre (Público)</label>
@@ -369,26 +356,8 @@
         </div>
 
         <div>
-          <label class="filter-label">PIN Privado (Solo tú lo sabrás)</label>
-          <input type="password" id="newUserPin" class="input-select" placeholder="Ej: 1234" readonly style="background: var(--bg-primary);">
-        </div>
-        
-        <!-- Tablero Numérico para Registro -->
-        <div class="pinpad-container" style="margin-top: 5px; margin-bottom: 5px;">
-          <div class="pinpad-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('1')">1</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('2')">2</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('3')">3</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('4')">4</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('5')">5</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('6')">6</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('7')">7</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('8')">8</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('9')">9</button>
-            <button type="button" class="pinpad-btn action" onclick="pressRegisterPinKey('clear')" style="color: var(--accent-red); font-weight: 700;">C</button>
-            <button type="button" class="pinpad-btn" onclick="pressRegisterPinKey('0')">0</button>
-            <button type="button" class="pinpad-btn action" onclick="pressRegisterPinKey('backspace')">⌫</button>
-          </div>
+          <label class="filter-label">Contraseña</label>
+          <input type="password" id="newUserPassword" class="input-select" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
         </div>
       </div>
       <div class="form-group" style="display: none;">
@@ -501,7 +470,12 @@
     </div>
   </div>
 
-  <script src="data.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="ascalckasncaslcknaslck.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="data.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
