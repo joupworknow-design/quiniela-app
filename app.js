@@ -1,19 +1,10 @@
-// Audioplace Quiniela 2026 - Firebase Auth + Firestore
+// Audioplace Quiniela 2026 - API REST + JWT
 
-const { auth, db, firebase } = window.firebaseServices;
-
-const COLLECTIONS = {
-  users: "users",
-  matches: "matches",
-  predictions: "predictions",
-  settings: "settings",
-  legacyUsers: "legacy_users"
-};
+const api = window.quinielaApi;
 
 const SESSION_KEY = "quiniela_current_user";
 const ACTIVE_TAB_KEY = "quiniela_active_tab";
-const LAST_EMAIL_KEY = "quiniela_last_email";
-const LAST_DISPLAY_NAME_KEY = "quiniela_last_display_name";
+const LAST_USERNAME_KEY = "quiniela_last_username";
 
 let state = {
   users: [],
@@ -26,11 +17,7 @@ let state = {
   isAdmin: false
 };
 
-let selectedAvatarEmoji = "⚽";
-let unsubscribeAuth = null;
-let unsubscribeUsers = null;
-let unsubscribeMatches = null;
-let unsubscribePredictions = null;
+let pollingTimer = null;
 
 const COUNTRY_CODES = {
   "Argelia": "dz",
@@ -84,30 +71,79 @@ const COUNTRY_CODES = {
   "Uzbekistán": "uz"
 };
 
-const TEAM_TRANSLATIONS = {
-  "Mexico": "México", "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Czech Republic": "Chequia",
-  "Canada": "Canadá", "Bosnia and Herzegovina": "Bosnia y Herzegovina", "USA": "EE.UU.", "United States": "EE.UU.",
-  "Paraguay": "Paraguay", "Qatar": "Catar", "Switzerland": "Suiza", "Brazil": "Brasil", "Morocco": "Marruecos",
-  "Haiti": "Haití", "Scotland": "Escocia", "Australia": "Australia", "Turkey": "Turquía", "Türkiye": "Turquía", "Germany": "Alemania",
-  "Curacao": "Curazao", "Curaçao": "Curazao", "Netherlands": "Países Bajos", "Japan": "Japón", "Ivory Coast": "Costa de Marfil",
-  "Ecuador": "Ecuador", "Sweden": "Suecia", "Tunisia": "Túnez", "Spain": "España", "Cape Verde": "Cabo Verde",
-  "Belgium": "Bélgica", "Egypt": "Egipto", "Saudi Arabia": "Arabia Saudita", "Uruguay": "Uruguay", "Iran": "Irán",
-  "New Zealand": "Nueva Zelanda", "France": "Francia", "Senegal": "Senegal", "Iraq": "Irak", "Norway": "Noruega",
-  "Argentina": "Argentina", "Algeria": "Argelia", "Austria": "Austria", "Jordan": "Jordania", "Portugal": "Portugal",
-  "DR Congo": "RD Congo", "Democratic Republic of the Congo": "RD Congo", "England": "Inglaterra", "Croatia": "Croacia",
-  "Ghana": "Ghana", "Panama": "Panamá", "Bolivia": "Bolivia", "Colombia": "Colombia", "Uzbekistan": "Uzbekistán"
-};
-
 window.addEventListener("DOMContentLoaded", async () => {
   document.body.classList.remove("dark-theme");
   setupNavigation();
   setupModalCloseOnOverlay();
   populateCountrySelects();
-  await seedInitialDataIfNeeded();
-  bindRealtimeCollections();
-  bindAuth();
+  window.onQuinielaUnauthorized = handleUnauthorized;
+  await initAuth();
+  startPolling();
   switchTab(state.activeTab);
 });
+
+function handleUnauthorized() {
+  state.currentUser = null;
+  state.isAdmin = false;
+  localStorage.removeItem(SESSION_KEY);
+  renderApp();
+}
+
+async function loadData() {
+  if (!api.getToken()) return;
+  try {
+    const data = await api.fetchData();
+    state.users = data.users || [];
+    state.matches = data.matches || [];
+    state.predictions = data.predictions || {};
+    state.matches.sort((a, b) => parseMatchDateAsUTC(a.date).getTime() - parseMatchDateAsUTC(b.date).getTime());
+    renderApp();
+  } catch (error) {
+    if (error.message !== "No autenticado" && error.message !== "Token inválido o expirado") {
+      console.error("Error cargando datos:", error);
+    }
+  }
+}
+
+function startPolling() {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(() => {
+    if (api.getToken()) loadData();
+  }, 30000);
+}
+
+async function initAuth() {
+  if (!api.getToken()) {
+    state.currentUser = null;
+    state.isAdmin = false;
+    renderApp();
+    return;
+  }
+
+  try {
+    const { user } = await api.getMe();
+    applyCurrentUser(user);
+    await loadData();
+  } catch (_error) {
+    api.logout();
+    state.currentUser = null;
+    state.isAdmin = false;
+    renderApp();
+  }
+}
+
+function applyCurrentUser(user) {
+  state.currentUser = {
+    uid: user.id,
+    id: user.id,
+    name: user.displayName,
+    displayName: user.displayName,
+    role: user.role || "user",
+    avatar: user.avatar || "⚽"
+  };
+  state.isAdmin = state.currentUser.role === "admin";
+  localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
+}
 
 function setupModalCloseOnOverlay() {
   document.querySelectorAll(".modal-overlay").forEach((overlay) => {
@@ -117,11 +153,6 @@ function setupModalCloseOnOverlay() {
       }
     });
   });
-}
-
-function normalizeName(name) {
-  if (!name) return "";
-  return name.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function parseMatchDateAsUTC(dateStr) {
@@ -149,304 +180,11 @@ function getCountryFlag(countryName) {
   return `<img src="https://flagcdn.com/w40/${code}.png" alt="Bandera de ${countryName}" class="country-flag-img" style="width: 24px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); object-fit: contain; vertical-align: middle; display: inline-block;">`;
 }
 
-function translateTeam(engName) {
-  if (!engName) return "";
-  return TEAM_TRANSLATIONS[engName] || engName;
-}
-
-function translateLabel(label) {
-  if (!label) return "";
-  return label
-    .replace(/Winner Group /g, "Ganador Grupo ")
-    .replace(/Runner-up Group /g, "Segundo Grupo ")
-    .replace(/3rd Group /g, "3ro Grupo ")
-    .replace(/Winner Match /g, "Ganador Partido ")
-    .replace(/Loser Match /g, "Perdedor Partido ");
-}
-
 function isMatchUndetermined(match) {
   if (!match || !match.homeTeam || !match.awayTeam) return true;
   const placeholders = ["Ganador", "Segundo", "Perdedor", "Grupo", "3ro", "3er", "Winner", "Runner-up", "3rd", "Loser"];
   return placeholders.some((p) => match.homeTeam.includes(p) || match.awayTeam.includes(p));
 }
-
-async function seedInitialDataIfNeeded() {
-  const appSettingsRef = db.collection(COLLECTIONS.settings).doc("app");
-  const settingsSnap = await appSettingsRef.get();
-  if (settingsSnap.exists && settingsSnap.data().seededV1) return;
-
-  const batch = db.batch();
-  INITIAL_MATCHES.forEach((match) => {
-    const ref = db.collection(COLLECTIONS.matches).doc(match.id);
-    batch.set(ref, { ...match, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  });
-
-  INITIAL_USERS.forEach((legacyUser) => {
-    const ref = db.collection(COLLECTIONS.legacyUsers).doc(legacyUser.id);
-    batch.set(ref, {
-      ...legacyUser,
-      claimed: false,
-      status: "available",
-      role: "user",
-      seededAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-
-  Object.entries(INITIAL_PREDICTIONS).forEach(([id, pred]) => {
-    const parts = id.split("_");
-    const legacyUserId = parts[0];
-    const matchId = parts.slice(1).join("_");
-    const ref = db.collection(COLLECTIONS.predictions).doc(`legacy_${id}`);
-    batch.set(ref, {
-      uid: `legacy_${legacyUserId}`,
-      legacyUserId,
-      matchId,
-      homeScore: pred.homeScore,
-      awayScore: pred.awayScore,
-      isLegacy: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-
-  batch.set(appSettingsRef, {
-    seededV1: true,
-    seededAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-
-  await batch.commit();
-}
-
-async function claimLegacyByName(displayName, uid) {
-  const targetName = normalizeName(displayName);
-  if (!targetName) return null;
-
-  const legacyUsersSnap = await db.collection(COLLECTIONS.legacyUsers).get();
-  let matchedLegacyUser = null;
-  let matchedLegacyRef = null;
-
-  legacyUsersSnap.forEach((doc) => {
-    if (matchedLegacyUser) return;
-    const data = doc.data();
-    const legacyName = normalizeName(data.name || "");
-    const alreadyClaimed = data.claimed === true;
-    if ((legacyName === targetName || legacyName.startsWith(targetName)) && !alreadyClaimed) {
-      matchedLegacyUser = { id: doc.id, ...data };
-      matchedLegacyRef = doc.ref;
-    }
-  });
-
-  if (!matchedLegacyUser) return null;
-
-  await db.runTransaction(async (tx) => {
-    const legacyDoc = await tx.get(matchedLegacyRef);
-    if (!legacyDoc.exists) {
-      throw new Error("Legacy user no encontrado.");
-    }
-    const legacyData = legacyDoc.data();
-    if (legacyData.claimed === true) {
-      throw new Error("Este usuario legacy ya fue reclamado.");
-    }
-    tx.set(matchedLegacyRef, {
-      claimed: true,
-      status: "claimed",
-      claimedBy: uid,
-      claimedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-
-  const legacyUid = `legacy_${matchedLegacyUser.id}`;
-  const [legacyByField, legacyByUid] = await Promise.all([
-    db.collection(COLLECTIONS.predictions).where("legacyUserId", "==", matchedLegacyUser.id).get(),
-    db.collection(COLLECTIONS.predictions).where("uid", "==", legacyUid).get()
-  ]);
-
-  const predictionsByMatchId = new Map();
-  [legacyByField, legacyByUid].forEach((snap) => {
-    snap.forEach((doc) => {
-      const data = doc.data();
-      if (!data.matchId) return;
-      if (!predictionsByMatchId.has(data.matchId)) {
-        predictionsByMatchId.set(data.matchId, data);
-      }
-    });
-  });
-
-  const batch = db.batch();
-  predictionsByMatchId.forEach((prediction, matchId) => {
-    const ref = db.collection(COLLECTIONS.predictions).doc(`${uid}_${matchId}`);
-    batch.set(ref, {
-      uid,
-      matchId,
-      homeScore: prediction.homeScore,
-      awayScore: prediction.awayScore,
-      migratedFromLegacy: matchedLegacyUser.id,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-
-  if (predictionsByMatchId.size > 0) {
-    await batch.commit();
-  }
-
-  return matchedLegacyUser;
-}
-
-function bindRealtimeCollections() {
-  unsubscribeUsers = db.collection(COLLECTIONS.users).onSnapshot((snap) => {
-    state.users = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    renderApp();
-  });
-
-  unsubscribeMatches = db.collection(COLLECTIONS.matches).onSnapshot((snap) => {
-    state.matches = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    state.matches.sort((a, b) => parseMatchDateAsUTC(a.date).getTime() - parseMatchDateAsUTC(b.date).getTime());
-    renderApp();
-  });
-
-  unsubscribePredictions = db.collection(COLLECTIONS.predictions).onSnapshot((snap) => {
-    const map = {};
-    snap.docs.forEach((doc) => {
-      const data = doc.data();
-      if (!data.matchId || !data.uid) return;
-      map[`${data.uid}_${data.matchId}`] = { homeScore: data.homeScore, awayScore: data.awayScore };
-    });
-    state.predictions = map;
-    renderApp();
-  });
-}
-
-function bindAuth() {
-  unsubscribeAuth = auth.onAuthStateChanged(async (firebaseUser) => {
-    if (!firebaseUser) {
-      state.currentUser = null;
-      state.isAdmin = false;
-      localStorage.removeItem(SESSION_KEY);
-      if (state.activeTab === "predictions" || state.activeTab === "groupStage") {
-        state.activeTab = "leaderboard";
-      }
-      renderApp();
-      return;
-    }
-
-    const userRef = db.collection(COLLECTIONS.users).doc(firebaseUser.uid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      await auth.signOut();
-      localStorage.removeItem(SESSION_KEY);
-      alert("Tu cuenta no está habilitada en la quiniela. Si necesitas acceso, contacta al administrador.");
-      return;
-    }
-    const userData = userSnap.data();
-    state.currentUser = {
-      uid: firebaseUser.uid,
-      id: firebaseUser.uid,
-      name: userData.displayName || firebaseUser.displayName || firebaseUser.email,
-      email: firebaseUser.email || "",
-      role: userData.role || "user",
-      avatar: userData.avatar || "⚽"
-    };
-    state.isAdmin = state.currentUser.role === "admin";
-    localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
-    renderApp();
-    // After rendering, ensure legacy predictions are claimed if missing
-    tryClaimLegacyForCurrentUser();
-  });
-}
-
-// Auto-claim legacy predictions for logged-in user if they have none
-async function tryClaimLegacyForCurrentUser() {
-  if (!state.currentUser) return;
-  const uid = state.currentUser.uid;
-  const name = state.currentUser.name || '';
-  const email = state.currentUser.email || '';
-  // Check if user already has predictions
-  const predsSnap = await db.collection(COLLECTIONS.predictions).where('uid', '==', uid).limit(1).get();
-  if (!predsSnap.empty) return; // already has predictions
-
-  // Build possible name candidates: full name, first name, email prefix
-  const candidates = [];
-  if (name) candidates.push(name);
-  const firstName = name.split(' ')[0];
-  if (firstName && firstName !== name) candidates.push(firstName);
-  if (email) {
-    const emailPrefix = email.split('@')[0];
-    if (emailPrefix) candidates.push(emailPrefix);
-  }
-
-  let claimed = false;
-  for (const candidate of candidates) {
-    const result = await claimLegacyByName(candidate, uid);
-    if (result) {
-      claimed = true;
-      renderApp();
-      break;
-    }
-  }
-
-  // If not claimed by name, attempt by legacy id (e.g., uid or email prefix)
-  if (!claimed) {
-    const idCandidates = [];
-    if (uid) idCandidates.push(uid);
-    if (email) {
-      const emailPrefix = email.split('@')[0];
-      if (emailPrefix) idCandidates.push(emailPrefix);
-    }
-    for (const idCand of idCandidates) {
-      const result = await claimLegacyById(idCand, uid);
-      if (result) {
-        renderApp();
-        break;
-      }
-    }
-  }
-}
-
-// Claim legacy predictions by legacy document id (instead of name)
-async function claimLegacyById(legacyId, uid) {
-  if (!legacyId) return null;
-  const legacyRef = db.collection(COLLECTIONS.legacyUsers).doc(legacyId);
-  const legacyDoc = await legacyRef.get();
-  if (!legacyDoc.exists) return null;
-  const legacyData = legacyDoc.data();
-  if (legacyData.claimed) return null;
-
-  // Mark as claimed
-  await db.runTransaction(async (tx) => {
-    tx.set(legacyRef, {
-      claimed: true,
-      status: "claimed",
-      claimedBy: uid,
-      claimedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-
-  // Migrate predictions for this legacy user
-  const legacyPredsSnap = await db.collection(COLLECTIONS.predictions)
-    .where("legacyUserId", "==", legacyId)
-    .get();
-  if (legacyPredsSnap.empty) return legacyData;
-
-  const batch = db.batch();
-  legacyPredsSnap.forEach(doc => {
-    const data = doc.data();
-    const matchId = data.matchId;
-    if (!matchId) return;
-    const ref = db.collection(COLLECTIONS.predictions).doc(`${uid}_${matchId}`);
-    batch.set(ref, {
-      uid,
-      matchId,
-      homeScore: data.homeScore,
-      awayScore: data.awayScore,
-      migratedFromLegacy: legacyId,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-  await batch.commit();
-  return legacyData;
-}
-
-
-
 
 function setupNavigation() {
   window.switchTab = (tabId) => {
@@ -696,20 +434,23 @@ window.openModal = (modalId) => document.getElementById(modalId)?.classList.add(
 window.closeModal = (modalId) => document.getElementById(modalId)?.classList.remove("active");
 
 window.openLoginModal = () => {
-  document.getElementById("loginEmail").value = localStorage.getItem(LAST_EMAIL_KEY) || "";
+  document.getElementById("loginUsername").value = localStorage.getItem(LAST_USERNAME_KEY) || "";
   document.getElementById("loginPassword").value = "";
   openModal("loginModal");
 };
 
 window.loginUser = async () => {
-  const email = document.getElementById("loginEmail").value.trim();
+  const username = document.getElementById("loginUsername").value.trim().toLowerCase();
   const password = document.getElementById("loginPassword").value.trim();
-  if (!email || !password) return alert("Ingresa correo y contraseña.");
+  if (!username || !password) return alert("Ingresa usuario y contraseña.");
   try {
-    await auth.signInWithEmailAndPassword(email, password);
-    localStorage.setItem(LAST_EMAIL_KEY, email);
+    const { token, user } = await api.login(username, password);
+    api.setToken(token);
+    applyCurrentUser(user);
+    localStorage.setItem(LAST_USERNAME_KEY, username);
     closeModal("loginModal");
-    window.location.reload();
+    await loadData();
+    renderApp();
   } catch (error) {
     alert(`No se pudo iniciar sesión: ${error.message}`);
   }
@@ -717,65 +458,17 @@ window.loginUser = async () => {
 
 window.logoutUser = async () => {
   if (!confirm("¿Seguro que quieres cerrar sesión?")) return;
-  try {
-    await auth.signOut();
-    localStorage.removeItem(SESSION_KEY);
-    window.location.reload();
-  } catch (error) {
-    alert(`Error cerrando sesión: ${error.message}`);
-  }
-};
-
-window.selectAvatar = (emoji, element) => {
-  selectedAvatarEmoji = emoji;
-  document.querySelectorAll(".avatar-option").forEach((opt) => opt.classList.remove("selected"));
-  if (element) element.classList.add("selected");
-};
-
-window.openRegisterUserFromLogin = () => {
-  closeModal("loginModal");
-  openRegisterUserModal();
-};
-
-window.openRegisterUserModal = () => {
-  document.getElementById("newUserEmail").value = localStorage.getItem(LAST_EMAIL_KEY) || "";
-  document.getElementById("newUsername").value = localStorage.getItem(LAST_DISPLAY_NAME_KEY) || "";
-  document.getElementById("newUserPassword").value = "";
-  const firstAvatar = document.querySelector(".avatar-option");
-  if (firstAvatar) selectAvatar("⚽", firstAvatar);
-  openModal("registerUserModal");
-};
-
-window.registerUser = async () => {
-  const email = document.getElementById("newUserEmail").value.trim();
-  const name = document.getElementById("newUsername").value.trim();
-  const password = document.getElementById("newUserPassword").value.trim();
-  if (!email || !name || !password) return alert("Completa correo, nombre y contraseña.");
-  if (password.length < 6) return alert("La contraseña debe tener mínimo 6 caracteres.");
-
-  try {
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    const matchedLegacyUser = await claimLegacyByName(name, cred.user.uid);
-    const finalDisplayName = matchedLegacyUser?.name || name;
-    const finalAvatar = matchedLegacyUser?.avatar || selectedAvatarEmoji;
-
-    await cred.user.updateProfile({ displayName: finalDisplayName });
-    await db.collection(COLLECTIONS.users).doc(cred.user.uid).set({
-      uid: cred.user.uid,
-      email,
-      displayName: finalDisplayName,
-      role: "user",
-      avatar: finalAvatar,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    localStorage.setItem(LAST_EMAIL_KEY, email);
-    localStorage.setItem(LAST_DISPLAY_NAME_KEY, finalDisplayName);
-    closeModal("registerUserModal");
-    switchTab("predictions");
-  } catch (error) {
-    console.error(error);
-    alert(`No se pudo registrar: ${error.message}`);
+  api.logout();
+  state.currentUser = null;
+  state.isAdmin = false;
+  state.users = [];
+  state.matches = [];
+  state.predictions = {};
+  localStorage.removeItem(SESSION_KEY);
+  if (state.activeTab === "predictions" || state.activeTab === "groupStage") {
+    switchTab("leaderboard");
+  } else {
+    renderApp();
   }
 };
 
@@ -817,14 +510,12 @@ window.confirmAndSavePrediction = async (matchId) => {
   const awayVal = document.getElementById(`away_${matchId}`).value.trim();
   if (homeVal === "" || awayVal === "") return alert("Ingresa ambos marcadores.");
   if (!confirm("¿Guardar este pronóstico? Luego no se podrá editar.")) return;
-  const uid = state.currentUser.uid;
-  await db.collection(COLLECTIONS.predictions).doc(`${uid}_${matchId}`).set({
-    uid,
-    matchId,
-    homeScore: parseInt(homeVal, 10),
-    awayScore: parseInt(awayVal, 10),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
+  try {
+    await api.savePrediction(matchId, parseInt(homeVal, 10), parseInt(awayVal, 10));
+    await loadData();
+  } catch (error) {
+    alert(`No se pudo guardar: ${error.message}`);
+  }
 };
 
 window.filterMatches = () => renderPredictions();
@@ -901,70 +592,14 @@ window.syncLiveResults = async () => {
     return alert("Solo un usuario admin puede sincronizar y guardar resultados.");
   }
 
-  const CORS_PROXIES = [
-    "https://api.allorigins.win/raw?url=",
-    "https://corsproxy.io/?",
-    "https://api.codetabs.com/v1/proxy?quest="
-  ];
-  const LIVE_API_URL = "https://worldcup26.ir/get/games";
-
-  let games = null;
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const response = await fetch(proxy + encodeURIComponent(LIVE_API_URL), { signal: AbortSignal.timeout(8000) });
-      if (!response.ok) continue;
-      const data = await response.json();
-      games = data.games || data;
-      if (Array.isArray(games) && games.length > 0) break;
-    } catch (_err) {}
-  }
-  if (!Array.isArray(games)) {
+  try {
+    const result = await api.syncLiveResults();
+    state.matches = result.matches || state.matches;
+    state.matches.sort((a, b) => parseMatchDateAsUTC(a.date).getTime() - parseMatchDateAsUTC(b.date).getTime());
+    renderApp();
+    if (syncBtn) syncBtn.textContent = result.updates > 0 ? "✅ Actualizado" : "Sin cambios";
+  } catch (_error) {
     if (syncBtn) syncBtn.textContent = "Sin conexión";
-    setTimeout(() => { if (syncBtn) syncBtn.textContent = "Actualizar Datos"; }, 2500);
-    return;
-  }
-
-  const batch = db.batch();
-  let updates = 0;
-  games.forEach((realMatch) => {
-    const apiId = parseInt(realMatch.id, 10);
-    const localMatch = state.matches.find((m) => m.apiId === apiId);
-    if (!localMatch) return;
-    const homeName = realMatch.home_team_name_en ? translateTeam(realMatch.home_team_name_en) : translateLabel(realMatch.home_team_label || "");
-    const awayName = realMatch.away_team_name_en ? translateTeam(realMatch.away_team_name_en) : translateLabel(realMatch.away_team_label || "");
-    const finished = realMatch.finished === "TRUE";
-    const isLive = realMatch.time_elapsed && realMatch.time_elapsed !== "finished" && realMatch.time_elapsed !== "notstarted";
-    const payload = {
-      homeTeam: homeName || localMatch.homeTeam,
-      awayTeam: awayName || localMatch.awayTeam,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    if (finished) {
-      payload.realHomeScore = parseInt(realMatch.home_score, 10);
-      payload.realAwayScore = parseInt(realMatch.away_score, 10);
-      payload.completed = true;
-      payload.status = "FINISHED";
-      payload.liveHomeScore = null;
-      payload.liveAwayScore = null;
-      payload.minute = null;
-    } else if (isLive) {
-      payload.completed = false;
-      payload.status = "IN_PLAY";
-      payload.liveHomeScore = parseInt(realMatch.home_score, 10) || 0;
-      payload.liveAwayScore = parseInt(realMatch.away_score, 10) || 0;
-      payload.minute = realMatch.time_elapsed || "45'";
-      payload.realHomeScore = null;
-      payload.realAwayScore = null;
-    }
-    batch.set(db.collection(COLLECTIONS.matches).doc(localMatch.id), payload, { merge: true });
-    updates++;
-  });
-
-  if (updates > 0) {
-    await batch.commit();
-    if (syncBtn) syncBtn.textContent = "✅ Actualizado";
-  } else if (syncBtn) {
-    syncBtn.textContent = "Sin cambios";
   }
   setTimeout(() => { if (syncBtn) syncBtn.textContent = "Actualizar Datos"; }, 2500);
 };
@@ -987,19 +622,17 @@ window.addNewMatch = async () => {
     alert("Los equipos local y visitante deben ser distintos.");
     return;
   }
-  const newId = `m_${Date.now()}`;
-  await db.collection(COLLECTIONS.matches).doc(newId).set({
-    id: newId,
-    stage,
-    group,
-    homeTeam: home,
-    awayTeam: away,
-    date: dateRaw.replace("T", " "),
-    realHomeScore: null,
-    realAwayScore: null,
-    completed: false,
-    status: "SCHEDULED",
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-  closeModal("addMatchModal");
+  try {
+    await api.addMatch({
+      stage,
+      group,
+      homeTeam: home,
+      awayTeam: away,
+      date: dateRaw.replace("T", " ")
+    });
+    await loadData();
+    closeModal("addMatchModal");
+  } catch (error) {
+    alert(`No se pudo agregar el partido: ${error.message}`);
+  }
 };

@@ -314,11 +314,11 @@
         <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
       </div>
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
-        <p style="color: var(--text-light); font-size: 0.95rem;">Ingresa tu correo y contraseña para acceder a tus pronósticos.</p>
+        <p style="color: var(--text-light); font-size: 0.95rem;">Ingresa tu usuario y contraseña para acceder a tus pronósticos.</p>
         
         <div>
-          <label class="filter-label">Correo</label>
-          <input type="email" id="loginEmail" class="input-select" placeholder="tu-correo@email.com" autocomplete="email">
+          <label class="filter-label">Usuario</label>
+          <input type="text" id="loginUsername" class="input-select" placeholder="ej: angel" autocomplete="username">
         </div>
         
         <div>
@@ -327,57 +327,6 @@
         </div>
         
         <button class="btn-primary" onclick="loginUser()" style="width: 100%; padding: 12px; margin-top: 10px;">Ingresar</button>
-        
-        <div style="text-align: center; margin-top: 15px;">
-          <a href="#" onclick="openRegisterUserFromLogin()" style="color: var(--accent-soccer); text-decoration: none; font-weight: 500;">¿Eres nuevo? Crea tu usuario aquí</a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: REGISTRO DE USUARIO -->
-  <div class="modal-overlay" id="registerUserModal">
-    <div class="modal-content" style="max-width: 400px;">
-      <div class="modal-header">
-        <h3 class="modal-title">Nuevo Usuario</h3>
-        <button class="modal-close" onclick="closeModal('registerUserModal')">✕</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
-        <p style="color: var(--text-light); font-size: 0.95rem;">Crea tu cuenta con correo, contraseña y nombre visible en el ranking.</p>
-
-        <div>
-          <label class="filter-label">Correo</label>
-          <input type="email" id="newUserEmail" class="input-select" placeholder="tu-correo@email.com" autocomplete="email">
-        </div>
-        
-        <div>
-          <label class="filter-label">Nombre (Público)</label>
-          <input type="text" id="newUsername" class="input-select" placeholder="Tu nombre" autocomplete="off">
-        </div>
-
-        <div>
-          <label class="filter-label">Contraseña</label>
-          <input type="password" id="newUserPassword" class="input-select" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
-        </div>
-      </div>
-      <div class="form-group" style="display: none;">
-        <label>Elige tu Avatar Emoji</label>
-        <div class="avatar-grid">
-          <div class="avatar-option selected" onclick="selectAvatar('⚽', this)">⚽</div>
-          <div class="avatar-option" onclick="selectAvatar('🏆', this)">🏆</div>
-          <div class="avatar-option" onclick="selectAvatar('🌟', this)">🌟</div>
-          <div class="avatar-option" onclick="selectAvatar('🔥', this)">🔥</div>
-          <div class="avatar-option" onclick="selectAvatar('🦖', this)">🦖</div>
-          <div class="avatar-option" onclick="selectAvatar('🦁', this)">🦁</div>
-          <div class="avatar-option" onclick="selectAvatar('🌮', this)">🌮</div>
-          <div class="avatar-option" onclick="selectAvatar('⚡', this)">⚡</div>
-          <div class="avatar-option" onclick="selectAvatar('😎', this)">😎</div>
-          <div class="avatar-option" onclick="selectAvatar('🎮', this)">🎮</div>
-        </div>
-      </div>
-      <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
-        <button class="btn btn-outline" onclick="closeModal('registerUserModal')">Cancelar</button>
-        <button class="btn btn-primary" onclick="registerUser()">Registrar e Ingresar</button>
       </div>
     </div>
   </div>
@@ -470,12 +419,8 @@
     </div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-  <script src="ascalckasncaslcknaslck.js"></script>
-  <script src="firebase-init.js"></script>
-  <script src="data.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="api-client.js?v=1"></script>
+  <script src="data.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
