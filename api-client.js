@@ -1,7 +1,7 @@
 // Cliente HTTP para quiniela-back
 (function () {
   const TOKEN_KEY = "quiniela_token";
-  const API_BASE_URL = window.QUINIELA_API_URL || "https://quiniela-api.sboada.com/api";
+  const API_BASE_URL = window.QUINIELA_API_URL || "https://quiniela-priv-api.sboada.com/api";
 
   function getToken() {
     return localStorage.getItem(TOKEN_KEY);
