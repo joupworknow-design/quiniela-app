@@ -68,6 +68,12 @@
         body: JSON.stringify({ realHomeScore, realAwayScore })
       });
     },
+    updateMatchTeam(matchId, payload) {
+      return apiFetch(`/matches/${matchId}/team`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+    },
     addMatch(payload) {
       return apiFetch("/matches", {
         method: "POST",
